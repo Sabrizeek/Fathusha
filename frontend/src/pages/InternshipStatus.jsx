@@ -36,6 +36,7 @@ const InternshipStatus = ({ onStatusChange }) => {
   const [messageType, setMessageType] = useState("info");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const application = status?.application;
   const progress = status?.progress;
@@ -43,6 +44,8 @@ const InternshipStatus = ({ onStatusChange }) => {
   const isPending = application?.approvalStatus === "pending";
   const isApproved = application?.approvalStatus === "approved";
   const offerDisabled = !isSelected || application?.processPaused || isApproved;
+  const savedOfferName =
+    isSelected && (isPending || isApproved) ? application?.offerLetterOriginalName : "";
 
   const approvalLabel = useMemo(() => {
     const labels = {
@@ -78,6 +81,8 @@ const InternshipStatus = ({ onStatusChange }) => {
     setMessage("");
     const response = await api.post("/internship/selected");
     applyStatus(response.data);
+    setForm(initialForm);
+    setFileInputKey((current) => current + 1);
     setMessageType("success");
     setMessage("You can now formalize your offer.");
   };
@@ -86,6 +91,8 @@ const InternshipStatus = ({ onStatusChange }) => {
     setMessage("");
     const response = await api.post("/internship/not-selected");
     applyStatus(response.data);
+    setForm(initialForm);
+    setFileInputKey((current) => current + 1);
     setMessageType("warning");
     setMessage(response.data.message || "Process Paused");
   };
@@ -127,6 +134,7 @@ const InternshipStatus = ({ onStatusChange }) => {
 
       applyStatus(response.data);
       setForm(initialForm);
+      setFileInputKey((current) => current + 1);
       setMessageType("success");
       setMessage(response.data.message || "Waiting for Department Approval");
     } catch (error) {
@@ -284,8 +292,9 @@ const InternshipStatus = ({ onStatusChange }) => {
 
             <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded border border-dashed border-navy/70 bg-sky-100 px-4 text-center text-sm text-slate-700">
               <span className="mb-2 flex h-9 w-9 items-center justify-center rounded bg-navy text-white">UP</span>
-              {form.offerLetter?.name || application?.offerLetterOriginalName || "Upload PDF, JPG, JPEG, or PNG offer letter"}
+              {form.offerLetter?.name || savedOfferName || "Upload PDF, JPG, JPEG, or PNG offer letter"}
               <input
+                key={fileInputKey}
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 className="sr-only"

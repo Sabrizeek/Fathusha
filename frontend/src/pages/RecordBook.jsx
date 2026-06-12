@@ -12,6 +12,12 @@ const blankEntry = {
   skillsGained: []
 };
 
+const toDateInputValue = (value) => {
+  if (!value) return "";
+
+  return new Date(value).toISOString().split("T")[0];
+};
+
 const RecordBook = () => {
   const [canAccess, setCanAccess] = useState(false);
   const [accessChecked, setAccessChecked] = useState(false);
@@ -23,6 +29,8 @@ const RecordBook = () => {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [addingSkill, setAddingSkill] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState("");
+  const [deletingEntryId, setDeletingEntryId] = useState("");
 
   const loadEntries = async () => {
     const response = await api.get("/recordbook");
@@ -147,12 +155,20 @@ const RecordBook = () => {
     setSubmitting(true);
 
     try {
-      await api.post("/recordbook/entry", {
+      const payload = {
         ...entry,
         weekNumber: Number(entry.weekNumber)
-      });
-      setMessage("Weekly log saved successfully.");
+      };
+
+      if (editingEntryId) {
+        await api.put(`/recordbook/${editingEntryId}`, payload);
+      } else {
+        await api.post("/recordbook/entry", payload);
+      }
+
+      setMessage(editingEntryId ? "Weekly log updated successfully." : "Weekly log saved successfully.");
       setEntry(blankEntry);
+      setEditingEntryId("");
       setErrors({});
       await loadEntries();
     } catch (error) {
@@ -160,6 +176,55 @@ const RecordBook = () => {
       setMessage(error.response?.data?.message || "Unable to save weekly log.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startEdit = (saved) => {
+    setEditingEntryId(saved._id);
+    setEntry({
+      weekNumber: String(saved.weekNumber),
+      reportingPeriod: saved.reportingPeriod || "",
+      startDate: toDateInputValue(saved.startDate),
+      endDate: toDateInputValue(saved.endDate),
+      tasksCompleted: saved.tasksCompleted || "",
+      challengesEncountered: saved.challengesEncountered || "",
+      reflectionAndLearningOutcomes: saved.reflectionAndLearningOutcomes || "",
+      skillsGained: Array.isArray(saved.skillsGained) ? saved.skillsGained : []
+    });
+    setErrors({});
+    setMessage("Editing weekly log entry.");
+  };
+
+  const cancelEdit = () => {
+    setEditingEntryId("");
+    setEntry(blankEntry);
+    setErrors({});
+    setMessage("");
+  };
+
+  const deleteEntry = async (saved) => {
+    const shouldDelete = window.confirm(`Delete Week ${saved.weekNumber} entry?`);
+
+    if (!shouldDelete || deletingEntryId) {
+      return;
+    }
+
+    setDeletingEntryId(saved._id);
+    setMessage("");
+
+    try {
+      await api.delete(`/recordbook/${saved._id}`);
+
+      if (editingEntryId === saved._id) {
+        cancelEdit();
+      }
+
+      setMessage("Weekly log deleted successfully.");
+      await loadEntries();
+    } catch (error) {
+      setMessage(error.response?.data?.message || "Unable to delete weekly log.");
+    } finally {
+      setDeletingEntryId("");
     }
   };
 
@@ -199,7 +264,9 @@ const RecordBook = () => {
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <section className="overflow-hidden rounded border border-sky-200 bg-panel shadow-sm">
           <div className="bg-navy px-4 py-3 text-white">
-            <h2 className="text-base font-semibold">Weekly Log Form</h2>
+            <h2 className="text-base font-semibold">
+              {editingEntryId ? "Edit Weekly Log" : "Weekly Log Form"}
+            </h2>
           </div>
 
           <form onSubmit={submitEntry} className="space-y-4 p-4">
@@ -320,12 +387,21 @@ const RecordBook = () => {
             </div>
 
             <div className="flex justify-end">
+              {editingEntryId && (
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="mr-2 rounded border border-navy px-5 py-2 text-sm font-semibold text-navy"
+                >
+                  Cancel Edit
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={submitting}
                 className="rounded bg-navy px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {submitting ? "Saving..." : "Save Weekly Log"}
+                {submitting ? "Saving..." : editingEntryId ? "Update Weekly Log" : "Save Weekly Log"}
               </button>
             </div>
           </form>
@@ -351,6 +427,23 @@ const RecordBook = () => {
                       {skill}
                     </span>
                   ))}
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(saved)}
+                    className="rounded border border-navy px-3 py-1 text-xs font-semibold text-navy"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteEntry(saved)}
+                    disabled={deletingEntryId === saved._id}
+                    className="rounded border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 disabled:opacity-50"
+                  >
+                    {deletingEntryId === saved._id ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </article>
             ))}

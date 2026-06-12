@@ -25,7 +25,18 @@ const isEndDateAfterStartDate = (startDate, endDate) => {
   return end > start;
 };
 
-const validateEntry = async (body) => {
+const normalizeEntryPayload = (body) => ({
+  weekNumber: Number(body.weekNumber),
+  reportingPeriod: body.reportingPeriod.trim(),
+  startDate: body.startDate,
+  endDate: body.endDate,
+  tasksCompleted: body.tasksCompleted.trim(),
+  challengesEncountered: body.challengesEncountered.trim(),
+  reflectionAndLearningOutcomes: body.reflectionAndLearningOutcomes.trim(),
+  skillsGained: body.skillsGained.map((skill) => String(skill).trim()).filter(Boolean)
+});
+
+const validateEntry = async (body, ignoredEntryId = null) => {
   const errors = {};
   const weekNumber = Number(body.weekNumber);
   const skillsGained = Array.isArray(body.skillsGained) ? body.skillsGained : [];
@@ -54,10 +65,16 @@ const validateEntry = async (body) => {
   if (skillsGained.length === 0) errors.skillsGained = "At least one skill is required.";
 
   if (Number.isFinite(weekNumber) && weekNumber > 0) {
-    const existing = await RecordBookEntry.findOne({
+    const duplicateQuery = {
       studentId: DEMO_STUDENT_ID,
       weekNumber
-    });
+    };
+
+    if (ignoredEntryId) {
+      duplicateQuery._id = { $ne: ignoredEntryId };
+    }
+
+    const existing = await RecordBookEntry.findOne(duplicateQuery);
 
     if (existing) {
       errors.weekNumber = "An entry for this week number already exists.";
@@ -115,14 +132,7 @@ export const createRecordBookEntry = async (req, res, next) => {
 
     const entry = await RecordBookEntry.create({
       studentId: DEMO_STUDENT_ID,
-      weekNumber: Number(req.body.weekNumber),
-      reportingPeriod: req.body.reportingPeriod.trim(),
-      startDate: req.body.startDate,
-      endDate: req.body.endDate,
-      tasksCompleted: req.body.tasksCompleted.trim(),
-      challengesEncountered: req.body.challengesEncountered.trim(),
-      reflectionAndLearningOutcomes: req.body.reflectionAndLearningOutcomes.trim(),
-      skillsGained: req.body.skillsGained.map((skill) => String(skill).trim()).filter(Boolean)
+      ...normalizeEntryPayload(req.body)
     });
 
     res.status(201).json(entry);
@@ -140,12 +150,23 @@ export const createRecordBookEntry = async (req, res, next) => {
 
 export const updateRecordBookEntry = async (req, res, next) => {
   try {
+    const application = await getApprovedApplication();
+
+    if (!application) {
+      return res.status(403).json({ message: unavailableMessage });
+    }
+
+    const errors = await validateEntry(req.body, req.params.id);
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: "Validation failed.", errors });
+    }
+
     const entry = await RecordBookEntry.findOneAndUpdate(
       { _id: req.params.id, studentId: DEMO_STUDENT_ID },
       {
-        ...req.body,
         studentId: DEMO_STUDENT_ID,
-        skillsGained: Array.isArray(req.body.skillsGained) ? req.body.skillsGained : []
+        ...normalizeEntryPayload(req.body)
       },
       { new: true, runValidators: true }
     );
@@ -156,12 +177,25 @@ export const updateRecordBookEntry = async (req, res, next) => {
 
     res.json(entry);
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "An entry for this week number already exists.",
+        errors: { weekNumber: "An entry for this week number already exists." }
+      });
+    }
+
     next(error);
   }
 };
 
 export const deleteRecordBookEntry = async (req, res, next) => {
   try {
+    const application = await getApprovedApplication();
+
+    if (!application) {
+      return res.status(403).json({ message: unavailableMessage });
+    }
+
     const entry = await RecordBookEntry.findOneAndDelete({
       _id: req.params.id,
       studentId: DEMO_STUDENT_ID

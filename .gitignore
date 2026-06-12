@@ -1,7 +1,7 @@
 node_modules/
 dist/
-.env
 *.log
 
 backend/src/uploads/offerLetters/*
 !backend/src/uploads/offerLetters/.gitkeep
+config.bat
