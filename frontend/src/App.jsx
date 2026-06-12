@@ -16,6 +16,7 @@ const LockedRecordBook = () => (
 
 const App = () => {
   const [recordBookEnabled, setRecordBookEnabled] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
 
   const syncInternshipState = (payload) => {
     setRecordBookEnabled(Boolean(payload?.application?.recordBookEnabled));
@@ -25,7 +26,8 @@ const App = () => {
     api
       .get("/internship/progress")
       .then((response) => syncInternshipState(response.data))
-      .catch(() => setRecordBookEnabled(false));
+      .catch(() => setRecordBookEnabled(false))
+      .finally(() => setCheckingAccess(false));
   }, []);
 
   return (
@@ -36,7 +38,15 @@ const App = () => {
           <Route path="/" element={<InternshipStatus onStatusChange={syncInternshipState} />} />
           <Route
             path="/record-book"
-            element={recordBookEnabled ? <RecordBook /> : <LockedRecordBook />}
+            element={
+              checkingAccess ? (
+                <main className="mx-auto max-w-6xl flex-1 px-4 py-8 text-sm">Checking record book access...</main>
+              ) : recordBookEnabled ? (
+                <RecordBook />
+              ) : (
+                <LockedRecordBook />
+              )
+            }
           />
         </Routes>
         <Footer />

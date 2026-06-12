@@ -25,6 +25,14 @@ const ensureInternshipState = async () => {
   return { application, progress };
 };
 
+const emptyOfferFields = {
+  companyName: "",
+  jobPosition: "",
+  internshipStartDate: null,
+  offerLetterPath: "",
+  offerLetterOriginalName: ""
+};
+
 const updateProgress = async (progressData) => {
   return ProgressStatus.findOneAndUpdate(
     { studentId: DEMO_STUDENT_ID },
@@ -45,7 +53,19 @@ const isPastDate = (value) => {
 
 export const getInternshipProgress = async (_req, res, next) => {
   try {
-    const { application, progress } = await ensureInternshipState();
+    let { application, progress } = await ensureInternshipState();
+    const hasVisibleOfferState = ["pending", "approved"].includes(application.approvalStatus);
+
+    if (
+      (application.selectionStatus !== "selected" || !hasVisibleOfferState) &&
+      (application.offerLetterOriginalName || application.offerLetterPath)
+    ) {
+      application = await InternshipApplication.findOneAndUpdate(
+        { studentId: DEMO_STUDENT_ID },
+        emptyOfferFields,
+        { new: true }
+      );
+    }
 
     res.json({
       demoStudentId: DEMO_STUDENT_ID,
@@ -60,14 +80,17 @@ export const getInternshipProgress = async (_req, res, next) => {
 export const markSelected = async (_req, res, next) => {
   try {
     const { application: current } = await ensureInternshipState();
+    const hasSubmittedOffer =
+      Boolean(current.offerLetterPath) && ["pending", "approved"].includes(current.approvalStatus);
 
     const application = await InternshipApplication.findOneAndUpdate(
       { studentId: DEMO_STUDENT_ID },
       {
         selectionStatus: "selected",
         processPaused: false,
-        approvalStatus: current.approvalStatus,
-        recordBookEnabled: current.approvalStatus === "approved"
+        approvalStatus: hasSubmittedOffer ? current.approvalStatus : "not_submitted",
+        recordBookEnabled: hasSubmittedOffer && current.approvalStatus === "approved",
+        ...(!hasSubmittedOffer ? emptyOfferFields : {})
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
@@ -91,7 +114,8 @@ export const markNotSelected = async (_req, res, next) => {
         selectionStatus: "not_selected",
         processPaused: true,
         approvalStatus: "not_submitted",
-        recordBookEnabled: false
+        recordBookEnabled: false,
+        ...emptyOfferFields
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );

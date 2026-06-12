@@ -4,8 +4,8 @@
   "description": "Standalone student internship status and record book frontend",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "dev": "node init && vite --host 0.0.0.0",
+    "build": "node init && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
